@@ -1,0 +1,554 @@
+//数据结构大课设
+/*=========================================================================*/
+/*                                 校园导游                                */
+/*问题描述：                                                               */
+/*    用无向图表示校园景点平面图，图中顶点表示主要景点(建筑)，存放景点编号 */                                                              
+/*名称 简介等信息，图中的边表示景点间的道路，存放路径长度等信息。要求能够回*/                 
+/*答有关景点介绍、游览路径等感兴趣的问题。                                 */ 
+/*基本要求：                                                               */
+/*1)查询任意景点的相关信息；√                                             */
+/*2)查询图中任意两个景点间的最短路径；√                                   */
+/*3)查询图中任意两个景点间的所有路径；√                                   */
+/*4)增加、删除、更新有关景点间的所有路径；√                               */
+/*5)指定某景点，查询感兴趣的一类景点； √                                  */
+/*=========================================================================*/ 
+#include<iostream>
+#include<cstring>
+using namespace std;
+const int inf=1e9;
+const int num=20;
+const int max_path=100; 
+struct spot//景点节点，存储景点有关信息 
+{
+	int number;//序号 
+	string name;//名称 
+	string decsribtion;//相关描述
+	int kind;//经典类型 
+};
+struct Node//图的节点 
+{
+	int key;//节点的关键字(可理解成经典的序号 
+	int flag;//是否被标记过？ 
+	Node()
+	{
+		flag=0;//初始状态都是没被走过的，标记为0 
+	}
+}; 
+//无向图的类 
+class undirectedGraph
+{
+	public:
+		spot spots[20];//校园景点(一个个小结构体 
+		int adjMatrix[20][20];//校园景点组成的邻接矩阵 
+		int spotNumber;//景点数
+		int allPath[max_path][num];//存储景点间的所有路径
+		int path[20];//景点间的某条路径
+		Node headNode;//头结点
+		Node tailNode;//尾节点
+		int pathNumber;//路径数
+		bool Flag[num];//标记某一点是否被访问过
+		int NOPath;//路径索引
+		undirectedGraph(int Matrix[20][20],spot sp[20],int number);//初始化无向图 
+		void searchSpot();//找景点有关信息
+		void shortestPath();//两点间的最短路径 
+		int addnewSpot();//添加新的景点 
+		int deleteoldSpot();//删除原有景点 
+		void modifySpot();//修改景点信息 
+		void allResult();//输出找到的所有路径
+		void findallResult(int matrix[num][num],Node headnode,Node endnode);//找所有路径的操作
+		void best_way(int start);
+		void otherSearch();//指定某景点，查询感兴趣的一类景点
+};
+//初始化无向图
+undirectedGraph::undirectedGraph(int Matrix[20][20],spot sp[20],int number)
+{
+	for(int i=0;i<20;i++)
+		for(int j=0;j<20;j++)
+			adjMatrix[i][j]=Matrix[i][j];
+	for(int i=0;i<20;i++)
+	{
+		spots[i]=sp[i];
+		//Flag[num]=0;//初始均未访问过 
+	}
+	for (int i=0;i<max_path;i++)  
+    {  
+        for (int j=0;j<num;j++)  
+        {  
+            allPath[i][j]=0;
+        }  
+        path[i]=0;  
+        Flag[i]=false;//所有节点都标记为未访问 
+    }  
+	spotNumber=number;
+	path[20]=0;//路径初始未访问 
+	pathNumber=0;//道路数初始0 
+	NOPath=0;//索引初始0 
+}
+//搜索景点相关信息 
+void undirectedGraph::searchSpot()
+{
+	int seq;//景点序号 
+	cout<<"请输入想了解的景点的序号:";
+	cin>>seq;
+	while(seq<0 || seq>spotNumber)
+	{
+		cout<<"不存在此景点序号，请重新输入:";
+		cin>>seq;
+	}
+	cout<<"景点序号:"<<seq<<endl;
+	cout<<"景点名称:"<<spots[seq].name<<endl;
+	cout<<"景点描述:"<<spots[seq].decsribtion<<endl;	 
+}
+//添加景点的信息
+int undirectedGraph::addnewSpot()
+{
+	int n;//与新景点相邻的原景点个数 
+	int aimSpot,distance;//与哪个景点相邻，距离又是多少 
+	//先增加当个景点结构体数组 
+	spots[++spotNumber].number=spotNumber;
+	cout<<"请输入新景点的名称:";
+	string newspotName;
+	cin>>newspotName;
+	spots[spotNumber].name=newspotName;
+	cout<<"请输入关于新景点的描述:";
+	string newdescribtion;
+	cin>>newdescribtion;
+	spots[spotNumber].decsribtion=newdescribtion;
+	adjMatrix[spotNumber][spotNumber]=0;
+	//添加道路信息
+	cout<<"请输入与这个新景点邻接的景点个数:"; cin>>n;
+	for(int i=0;i<n;i++)
+	{
+		cout<<"请输入与这个新景点相邻的第"<<i+1<<"个景点的编号与它们之间的距离:";
+		cin>>aimSpot>>distance;
+		adjMatrix[aimSpot][spotNumber]=distance;
+		adjMatrix[spotNumber][aimSpot]=distance;	
+	} 
+	//会不会有冗余嫌疑？ 
+	cout<<"新景点添加成功!"<<endl;
+	cout<<"新景点编号:"<<spots[spotNumber].number<<endl;
+	cout<<"新景点名称:"<<spots[spotNumber].name<<endl;
+	cout<<"新景点描述:"<<spots[spotNumber].decsribtion<<endl; 
+	
+	return spotNumber;
+}
+//删除指定的景点的信息
+int undirectedGraph::deleteoldSpot()
+{
+	int oldnum;
+	cout<<"请输入想删除的原景点编号:";
+	cin>>oldnum;
+	//从它开始。之后的都往前移 
+	for(int i=oldnum;i<spotNumber;i++)
+	{
+		spots[i]=spots[i+1];
+	}
+	//删除它在原来的道路矩阵中对应的行和列
+	for(int i=0;i<spotNumber+1;i++)
+		for(int j=oldnum;j<spotNumber;j++)
+			adjMatrix[i][j]=adjMatrix[i][j+1];
+	for(int i=oldnum;i<spotNumber;i++)
+		for(int j=0;j<spotNumber;j++)
+			adjMatrix[i][j]=adjMatrix[i+1][j];
+	//检验一下结果对不对的
+	for(int i=0;i<spotNumber;i++)
+	{
+		for(int j=0;j<spotNumber;j++)
+			cout<<adjMatrix[i][j]<<" ";
+		cout<<endl;
+	}
+	
+	return --spotNumber;
+	
+}
+//更新指定景点的信息
+void undirectedGraph::modifySpot()
+{
+	int modifynum;//想修改的景点编号
+	string newName;//景点新名字
+	string newdescribtion;//景点新描述 
+	int newdistance;//景点间新的距离
+	int ch;//选择 
+	int othernum;//邻接景点的编号 
+	cout<<"请选择你想要修改的景点编号:";
+	cin>>modifynum;
+	cout<<"请选择你要进行修改的项目:1.名称;2.描述;3.景点间的距离:"; 
+	cin>>ch;
+	switch(ch)
+	{
+		case 1:
+			{
+				cout<<"请输入修改后的名称:";
+				cin>>newName;
+				spots[modifynum].name=newName;
+				break;
+			}
+		case 2:
+			{
+				cout<<"请输入修改后的描述:";
+				cin>>newdescribtion;
+				spots[modifynum].decsribtion=newdescribtion;
+				break;
+			}
+		case 3:
+			{
+				cout<<"请输入想修改的和这个景点邻接的景点的编号以及修改后的距离:";
+				cin>>othernum>>newdistance;
+				adjMatrix[modifynum][othernum]=newdistance;
+				adjMatrix[othernum][modifynum]=newdistance; 
+			}
+	} 
+}
+//查询图中任意两个景点间的最短路径
+void undirectedGraph::shortestPath()
+{
+	int start,end;//起点终点
+	int a,b,c;
+	cout<<"请输入起点的编号:";cin>>start;
+	cout<<"请输入终点的编号:";cin>>end;
+	int via[spotNumber+1][spotNumber+1];//最小路径的前驱点
+	int shortestb2[spotNumber+1][spotNumber+1];//顶点间的最短路径
+	for(int a=0;a<spotNumber+1;a++)
+		for(int b=0;b<spotNumber+1;b++)
+		{
+			shortestb2[a][b]=adjMatrix[a][b];
+			via[a][b]=b;
+		}
+	//弗洛依德
+	for(c=0;c<spotNumber+1;c++)
+		for(a=0;a<spotNumber+1;a++)
+			for(b=0;b<spotNumber+1;b++)
+			{
+				if(shortestb2[a][b]>(shortestb2[a][c]+shortestb2[c][b]))
+				{
+					shortestb2[a][b]=shortestb2[a][c]+shortestb2[c][b];
+					via[a][b]=via[a][c];
+				}
+			}
+	cout<<"两顶点间的最短路径长度为:"<<shortestb2[start][end]<<endl;
+	c=via[start][end];
+	cout<<"最短路径规划:"<<endl;
+	cout<<start;
+	while(c!=end)
+	{
+		cout<<"->"<<c;
+		c=via[c][end];
+	}
+	cout<<"->"<<end<<endl;
+} 
+//查询图中任意两个景点间的所有路径
+void undirectedGraph::allResult()
+{
+	int startPoint,endPoint;//起点，终点
+	cout<<"请输入起点编号:";
+	cin>>startPoint;
+	cout<<"请输入终点编号:";
+	cin>>endPoint;
+	int x=startPoint+1;
+	int y=endPoint+1;
+	
+	headNode.key=x;
+	tailNode.key=y;
+	headNode.flag=1;//起点标记为已经走过 
+	
+	findallResult(adjMatrix,headNode,tailNode);//调用深搜寻找两点之间所有路径的操作 
+	cout<<"这两点间的路径共有"<<pathNumber<<"条:"<<endl;
+	for(int i=0;i<pathNumber;i++)
+	{
+		cout<<"第"<<i+1<<"条:";
+		for(int j=0;j<num;j++)
+		{
+			if (allPath[i][j]==0)  
+            {  
+                break;  
+            } 
+			cout<<allPath[i][j]-1<<" ";
+		}
+		cout<<endl;	
+	}
+}
+//查找两个景点间的所有路径的搜索操作
+void undirectedGraph::findallResult(int matrix[num][num],Node headnode,Node endnode)  
+{  
+    path[NOPath]=headnode.key;  //将当前元素放入结果集中  
+    Flag[headnode.key-1]=true;  //将访问标记为已访问  
+    NOPath++;  //结果集索引加1  
+    while(NOPath!=0)    
+    {    
+        int tempVal=path[NOPath-1];//获取到最前面的元素    
+        if (tempVal==endnode.key)  //若当前元素为目标节点  
+        {    
+            for (int j=0;j<NOPath;j++)    
+            {    
+                allPath[pathNumber][j]=path[j];  //将结果集复制于最后的路径矩阵中  
+            }    
+            NOPath--;  //回溯至上一个节点  
+            path[NOPath]=0;  //结果集对应索引置为空  
+            pathNumber++;  //路径数目加1  
+            Flag[endnode.key-1]=false;    //将最终节点弹出 
+            break;    
+        }    
+        while(headnode.flag<num)//利用flag来指示每次的元素的索引    
+        {    
+            if (matrix[tempVal-1][headnode.flag]<inf&&matrix[tempVal-1][headnode.flag]>0)//用来寻找tempVal-1这一行中哪个节点与startNode连通。 
+            {    
+                if (Flag[headnode.flag]==false)//利用Flag来判断是否已经访问过该节点    
+                {    
+                    Node tempNode;    
+                    tempNode.key=headnode.flag+1;    
+                    findallResult(matrix,tempNode,endnode);//深度优先遍历算法，    
+                }               
+            }    
+            headnode.flag++;//索引值相应的加一    
+        }    
+  
+        if(headnode.flag==num)//如果已经是到最后的节点，说明访问结束，    
+        {                           //将对应的值置为空    
+            NOPath--;  //再次向上回溯  
+            headnode.flag=0;  //将节点的索引置为空  
+            path[NOPath]=0;  //将结果集中对应的索引置为空  
+            Flag[headnode.key-1]=false;  //访问之后标记为未访问。因为下面的元素已经访问结束，便于下次的访问  
+            break;    
+        } 
+    }   
+}
+
+void undirectedGraph::best_way(int start)
+{//最近的某类景点 
+	int d,e,f;
+	int dis_store=inf;
+	int destination;
+	for(int i=0;i<=spotNumber;i++)
+	{
+		if(spots[i].kind==1)
+		{
+			int end=spots[i].number;
+			int via[spotNumber+1][spotNumber+1];//最小路径的前驱点
+			int shortestb2[spotNumber+1][spotNumber+1];//顶点间的最短路径
+			for(d=0;d<spotNumber+1;d++)
+				for(e=0;e<spotNumber+1;e++)
+				{
+					shortestb2[d][e]=adjMatrix[d][e];
+					via[d][e]=e;
+				}
+			//弗洛依德
+			for(f=0;f<spotNumber+1;f++)
+				for(d=0;d<spotNumber+1;d++)
+					for(e=0;e<spotNumber+1;e++)
+					{
+						if(shortestb2[d][e]>(shortestb2[d][f]+shortestb2[f][e]))
+						{
+							shortestb2[d][e]=shortestb2[d][f]+shortestb2[f][e];
+							via[d][e]=via[d][f];
+						}
+					}
+			if(shortestb2[start][end]<dis_store)
+			{
+				dis_store=shortestb2[start][end];
+				destination=end;
+			}
+		}
+	}
+	cout<<"你应该去"<<spots[destination].name<<",距离选择的出发地"<<dis_store<<"米."<<endl;	
+} 
+
+//指定某景点，查询感兴趣的一类景点
+void undirectedGraph::otherSearch()
+{
+	char letter;//查询项 
+	cout<<"请问你需要查询哪方面的信息呢?"<<endl;
+	cout<<"A.学习场所 B.外出 C.休息区域 D.餐饮 E.其他 F.最佳路径"<<endl; 
+	cin>>letter;
+	switch(letter)
+	{
+		case 'A':
+			{
+				for(int i=0;i<=spotNumber;i++)
+				{
+					if(spots[i].kind==1)
+						cout<<spots[i].name<<endl;
+				}
+				break;
+			}
+		case 'B':
+			{
+				for(int i=0;i<=spotNumber;i++)
+				{
+					if(spots[i].kind==2)
+						cout<<spots[i].name<<endl;
+				}
+				break;
+			}
+		case 'C':
+			{
+				for(int i=0;i<=spotNumber;i++)
+				{
+					if(spots[i].kind==3)
+						cout<<spots[i].name<<endl;
+				}
+				break;
+			}  
+		case 'D':
+			{
+				for(int i=0;i<=spotNumber;i++)
+				{
+					if(spots[i].kind==4)
+						cout<<spots[i].name<<endl;
+				}
+				break;
+			} 
+		case 'E':
+			{
+				for(int i=0;i<=spotNumber;i++)
+				{
+					if(spots[i].kind==5)
+						cout<<spots[i].name<<endl;
+				}
+				break;
+			}
+		case 'F':
+			{
+				int commend;
+				cout<<"根据经验,我猜你会问这些问题哦:"<<endl;
+				cout<<"1.离食堂最近的学习场所"<<endl;
+				cout<<"2.离S2楼最近的学习场所"<<endl;
+				cout<<"3.离S1楼最近的学习场所"<<endl;
+				cout<<"4.没有想问的?点击反馈哦!"<<endl;
+				cout<<"你的问题:";cin>>commend;
+				if(commend==1)
+					best_way(8); 
+				else if(commend==2)
+					best_way(7);
+				else if(commend==3)
+					best_way(6);
+				else if(commend==4)
+					cout<<"感谢反馈^_^"<<endl;
+				break; 
+			} 	
+	}
+} 
+
+//主函数
+int main()
+{
+	int spotNumber=11;//有12个景点,(为11是因为序号从0开始 
+	
+	//界面.Part1
+	cout<<"================================================================"<<endl;
+	cout<<"|        ☆☆☆欢迎使用山东大学青岛校区校园导游系统☆☆☆      |"<<endl;
+	cout<<"================================================================"<<endl;
+	cout<<"================================================================"<<endl;
+	cout<<"|[0]山青西门            [1]图书馆               [2]华岗苑      |"<<endl; 
+	cout<<"|[3]振声苑              [4]N3楼                 [5]博物馆      |"<<endl;
+	cout<<"|[6]S1一多书院          [7]S2从文书院           [8]曦园餐厅    |"<<endl;
+	cout<<"|[9]迎新广场            [10]山青南门            [11]双创中心   |"<<endl;
+	cout<<"================================================================"<<endl;
+	cout<<"================================================================"<<endl;
+	cout<<"|功能选择:                                                     |"<<endl;
+	cout<<"|【1】查询景点信息                                             |"<<endl; 
+	cout<<"|【2】查询任意两个景点间的最短路径                             |"<<endl;
+	cout<<"|【3】查询任意两个景点间的所有路径                             |"<<endl;
+	cout<<"|【4】增加、删除、更新有关景点间的所有路径                     |"<<endl;
+	cout<<"|【5】指定某景点，查询感兴趣的一类景点                         |"<<endl;
+	cout<<"|【6】关闭系统                                                 |"<<endl;
+	cout<<"================================================================"<<endl; 
+	//景点结构体数组 
+	spot spots[20]=
+	{
+		{0,"山青西门","位于图书馆对面的山青西门，直通泰安街以及地铁站，交通还算是很便利的！",2},
+		{1,"图书馆","单体最大图书馆，共有12层，其中藏书丰富。这是莘莘学子们专心致志学习的天堂，外来人员需要登记哟~",1},
+		{2,"华岗苑","教务、成绩单打印、办理一卡通等服务，应有尽有",5},
+		{3,"振声苑","山青学子们上课的地点，南楼可以通宵，你懂的(手动滑稽",1},
+		{4,"N3楼","这个就是计算机科学与技术学院楼啦，计科人做实验的地方~大佬云集地，实验室很多，感兴趣就来join them!",1},
+		{5,"博物馆","山青地标性建筑，顶部方块字暗藏玄机",5},
+		{6,"S1一多书院","以闻一多先生的名字命名，其实这是政管、电信、环境本科生的学生公寓楼",3},
+		{7,"S2从文书院","以沈从文先生的名字命名，其实这是法学、生科、计科本科生的学生公寓楼",3},
+		{8,"曦园餐厅","目前山青只有这一个食堂qwq",4},
+		{9,"迎新广场","每个新学年到来的时候，这里总是格外热闹呢~",5},
+		{10,"山青南门","出去就是公交车站啦",2},
+		{11,"双创中心","现在双创中心已有多家店相继入驻了，欢迎同学们来瞧一瞧看一看呀！",4} 
+	}; 
+	//景点邻接矩阵 
+	int adjMatrix[20][20]=
+	{
+		{0,200,300,inf,inf,inf,inf,inf,inf,inf,inf,inf},//山青西门到其他景点 
+		{200,0,400,500,600,700,900,inf,inf,inf,inf,inf},//图书馆到其他景点 
+		{300,400,0,150,inf,inf,inf,inf,inf,inf,inf,inf},//华岗苑到其他景点 
+		{inf,500,150,0,inf,1000,inf,inf,inf,inf,inf,inf},//振声苑到其他景点 
+		{inf,600,inf,inf,0,inf,inf,200,220,inf,inf,inf},//N3楼到其他景点 
+		{inf,700,inf,1000,inf,0,700,inf,inf,600,1000,inf},//博物馆到其他景点
+	    {inf,900,inf,inf,inf,700,0,50,inf,200,inf,inf},//S1到其他景点
+		{inf,inf,inf,inf,200,inf,50,0,40,inf,inf,inf},//S2到其他景点 
+		{inf,inf,inf,inf,220,inf,inf,40,0,inf,inf,800},//食堂到其他景点
+		{inf,inf,inf,inf,inf,600,200,inf,inf,0,700,inf},//迎新广场到其他景点
+		{inf,inf,inf,inf,inf,1000,inf,inf,inf,700,0,inf},//南门到其他景点
+		{inf,inf,inf,inf,inf,inf,inf,inf,800,inf,inf,0},//双创中心到其他景点 
+	}; 
+	
+	undirectedGraph G(adjMatrix,spots,spotNumber);
+	
+	//选择需要的服务 
+	while(1)
+	{
+		int choice;
+		cout<<"请选择你所需要的服务:";
+		bool result=false;
+		while(result==false)
+		{
+			cin>>choice;
+			if(choice==1||choice==2||choice==3||choice==4||choice==5||choice==6)
+			{
+				result=true;
+				break;
+			}
+			cout<<"输入的需要有误，请输入正确的序号哦^_^:"; 
+		}
+		
+		switch(choice)
+		{
+			case 1:
+				{
+					G.searchSpot();
+					cout<<"-----------------------------------------------------------------"<<endl;
+					break;
+				}
+			case 2:
+				{
+					G.shortestPath();
+					cout<<"-----------------------------------------------------------------"<<endl;
+					break;
+				}
+			case 3:
+				{
+					G.allResult();
+					cout<<"-----------------------------------------------------------------"<<endl;
+					break;
+				}
+			case 4:
+				{
+					int ask;
+					cout<<"请输入你需要进行的操作:1.增加新景点;2.删除旧景点;3.修改某些信息:";
+					cin>>ask;
+					if(ask==1)
+						G.addnewSpot();
+					else if(ask==2)
+						G.deleteoldSpot();
+					else if(ask==3)
+						G.modifySpot();
+					cout<<"-----------------------------------------------------------------"<<endl;
+					break;	
+				}
+			case 5:
+				{
+					G.otherSearch();
+					cout<<"-----------------------------------------------------------------"<<endl;
+					break;
+				}
+			case 6:
+				{
+					cout<<"感谢使用>q<!"<<endl;
+					return 0; 
+				} 
+		}
+	}
+} 
